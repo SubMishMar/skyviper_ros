@@ -1,0 +1,5 @@
+<launch>
+    <param name="config_file" value="/home/subodh/solo_ws/src/pose_publisher_single/data/cam_sv_gripen.yaml" /> 
+    <node name="pose_publisher_single" pkg="pose_publisher_single" type="pose_publisher_single_node" output="screen">
+    </node>
+</launch>

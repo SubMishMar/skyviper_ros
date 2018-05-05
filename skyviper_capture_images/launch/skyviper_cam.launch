@@ -1,0 +1,4 @@
+<launch>
+    <node name="skyviper_cam" pkg="skyviper_capture_images" type="skyviper_capture_images_node" output="screen">
+    </node>
+</launch>
