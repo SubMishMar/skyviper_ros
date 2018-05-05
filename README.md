@@ -21,8 +21,9 @@ roslaunch pose_publisher_single pose_publisher_single.launch
 
 rostopic echo relevant topics to see the outputs and also make sure that your camera is viewing an aruco marker, otherwise you may not get any output in /mavros/local_position/pose 
 
-# important
-Enable EKF3 
+important:
+
+Enable EKF3 &
 Set VISO Type to MAV
 
 
