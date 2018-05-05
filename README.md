@@ -24,7 +24,7 @@ rostopic echo relevant topics to see the outputs and also make sure that your ca
 important:
 
 Enable EKF3 &
-Set VISO Type to MAV
+Set VISO Type to MAV by looking into the parameters list of QGC or Mission Planner
 
 
 
