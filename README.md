@@ -23,8 +23,9 @@ rostopic echo relevant topics to see the outputs and also make sure that your ca
 
 important:
 
-Enable EKF3 &
+1. Enable EKF3 &
 Set VISO Type to MAV by looking into the parameters list of QGC or Mission Planner
+2. Make relevant changes in mavros code as mentioned here https://discuss.ardupilot.org/t/vision-position-estimate-not-appearing-in-qgroundcontrol/23978
 
 
 
