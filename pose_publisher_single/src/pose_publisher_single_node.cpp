@@ -98,7 +98,7 @@ int main(int argc, char** argv)
   double mean_x, mean_y, d_fm_ctr;
   
   tf::Matrix3x3 Rotn;
-  tf::Quaternion Quatn;
+  tf::Quaternion Quatn(0,0,0,1);
   geometry_msgs::PoseStamped pose_6d;
 
   nav_msgs::Path path_6d;
@@ -111,7 +111,7 @@ int main(int argc, char** argv)
   int row, col;
   double sum_x, sum_y, sum_z, alpha_x, alpha_y, alpha_z, count;
   sum_x = sum_y = sum_z = 0;
-  alpha_x = alpha_y = alpha_z = 0.1;
+  alpha_x = alpha_y = alpha_z = 0.8;
   count = 0;
   while(ros::ok())
   {
@@ -175,10 +175,12 @@ int main(int argc, char** argv)
                         {0, 0, 1, 0}, 
                         {0, 0, 0, 1}};
         */
-        double data_Rpremul[4][4] = {{1, 0, 0, 0}, 
-                                     {0, 1, 0, 0}, 
-                                     {0, 0, 1, 0}, 
-                                     {0, 0, 0, 1}};
+
+        // data_Rpremul used to convert from ENU to NED
+        double data_Rpremul[4][4] = {{1, 0,  0, 0}, 
+                                     {0, 1,  0, 0}, 
+                                     {0, 0,  1, 0}, 
+                                     {0, 0,  0, 1}};
         cv::Mat Tpremul = cv::Mat(4, 4, CV_64F, data_Rpremul);
         T_wc_transformed = Tpremul*T_cw.inv()*transformation;
 
@@ -229,7 +231,31 @@ int main(int argc, char** argv)
         path_6d.poses.push_back(pose_6d);
         path_publisher.publish(path_6d);
    }
+   else {
+        static tf::TransformBroadcaster br;
+        tf::Transform transform;
+        tf::Vector3 globalTranslation_rh(sum_x,
+                                         sum_y,
+                                         sum_z);
+        transform.setOrigin(globalTranslation_rh);
+        transform.setRotation(Quatn);
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
+        pose_6d.header.frame_id = path_6d.header.frame_id = "map";
+        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
+     
+        pose_6d.pose.position.x = sum_x;
+        pose_6d.pose.position.y = sum_y;
+        pose_6d.pose.position.z = sum_z;
+        pose_6d.pose.orientation.x = Quatn[0];
+        pose_6d.pose.orientation.y = Quatn[1];
+        pose_6d.pose.orientation.z = Quatn[2];
+        pose_6d.pose.orientation.w = Quatn[3];  
 
+
+        pub_avg_pose.publish(pose_6d);
+        path_6d.poses.push_back(pose_6d);
+        path_publisher.publish(path_6d);  	
+   }
    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();
    msg->header.stamp = ros::Time::now();
    image_pub_.publish(msg);
@@ -237,7 +263,30 @@ int main(int argc, char** argv)
    else
    {
     ROS_INFO("Waiting for Images");
-   }
+    static tf::TransformBroadcaster br;
+    tf::Transform transform;
+    tf::Vector3 globalTranslation_rh(sum_x,
+                                     sum_y,
+                                     sum_z);
+    transform.setOrigin(globalTranslation_rh);
+    transform.setRotation(Quatn);
+    br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
+    pose_6d.header.frame_id = path_6d.header.frame_id = "map";
+    pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
+ 
+    pose_6d.pose.position.x = sum_x;
+    pose_6d.pose.position.y = sum_y;
+    pose_6d.pose.position.z = sum_z;
+    pose_6d.pose.orientation.x = Quatn[0];
+    pose_6d.pose.orientation.y = Quatn[1];
+    pose_6d.pose.orientation.z = Quatn[2];
+    pose_6d.pose.orientation.w = Quatn[3];  
+
+
+    pub_avg_pose.publish(pose_6d);
+    path_6d.poses.push_back(pose_6d);
+    path_publisher.publish(path_6d); 
+}
    ros::spinOnce();
    loop_rate.sleep();
   }
