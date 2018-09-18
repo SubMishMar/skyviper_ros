@@ -281,13 +281,13 @@ int main(int argc, char** argv)
           pose_6d.header.frame_id = path_6d.header.frame_id = "map";
           pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
        
-          pose_6d.pose.position.x = 0;
-          pose_6d.pose.position.y = 0;
+          pose_6d.pose.position.x = sum_x;
+          pose_6d.pose.position.y = sum_y;
           pose_6d.pose.position.z = 0;
-          pose_6d.pose.orientation.x = 0;
-          pose_6d.pose.orientation.y = 0;
-          pose_6d.pose.orientation.z = 0;
-          pose_6d.pose.orientation.w = 1;  
+          pose_6d.pose.orientation.x = Quatn[0];
+          pose_6d.pose.orientation.y = Quatn[1];
+          pose_6d.pose.orientation.z = Quatn[2];
+          pose_6d.pose.orientation.w = Quatn[3];  
 
           pub_avg_pose.publish(pose_6d);
           path_6d.poses.push_back(pose_6d);
