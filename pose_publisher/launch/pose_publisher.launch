@@ -1,5 +1,5 @@
 <launch>
-    <param name="config_file" value="/home/subodh/ardupilot_ws/src/pose_publisher/data/cam_sv_bl.yaml" /> 
+    <param name="config_file" value="/home/srik/catkin_ws/src/pose_publisher/data/cam_sv_gripen.yaml" /> 
     <node name="pose_publisher" pkg="pose_publisher" type="pose_publisher_node" output="screen">
     </node>
 </launch>
