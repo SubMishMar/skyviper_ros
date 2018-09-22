@@ -1,0 +1,8 @@
+prefix=/home/subodh/arducopter_ws/src/pose_publisher_single/cmake-build-debug/devel
+
+Name: pose_publisher_single
+Description: Description of pose_publisher_single
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/subodh/arducopter_ws/src/pose_publisher_single/cmake-build-debug/devel/lib 
+Requires: 

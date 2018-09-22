@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: pose_publisher_single
+Description: Description of pose_publisher_single
+Version: 0.0.0
+Cflags: 
+Libs: -L/usr/local/lib 
+Requires: 

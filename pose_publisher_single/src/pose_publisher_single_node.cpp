@@ -52,14 +52,15 @@ int main(int argc, char** argv)
   image_transport::Subscriber image_sub_ = it_.subscribe("/skyviper/camera", 1, imageCallback);
   image_transport::Publisher image_pub_ = it_.advertise("/skyviper/camera/markers", 1);
   //ros::Publisher pub = nh_.advertise<geometry_msgs::PoseStamped>("/skyviper/pose",1000);
-  ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose",1000);
+  //ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose",1000);
+  ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/mocap/pose",1000);
   ros::Publisher path_publisher = nh_.advertise<nav_msgs::Path>( "/skyviper/path", 1000);
 
 
   std::string config_file;
   if(!nh_.getParam("config_file", config_file))
   {
- 	ROS_ERROR("Config File Address Not Loaded");
+ 	 ROS_ERROR("Config File Address Not Loaded");
   }
   cv::FileStorage fs(config_file, cv::FileStorage::READ);
   if (!fs.isOpened())
@@ -98,7 +99,7 @@ int main(int argc, char** argv)
   double mean_x, mean_y, d_fm_ctr;
   
   tf::Matrix3x3 Rotn;
-  tf::Quaternion Quatn(0,0,0,1);
+  tf::Quaternion Quatn(0, 0, 0, 1);
   geometry_msgs::PoseStamped pose_6d;
 
   nav_msgs::Path path_6d;
@@ -125,6 +126,7 @@ int main(int argc, char** argv)
    // if at least one marker detected
    if (ids.size() > 0)
    {
+        ROS_INFO_STREAM("Seeing at least one marker");
         cv::aruco::drawDetectedMarkers(cv_ptr->image, corners, ids);
         cv::aruco::estimatePoseSingleMarkers(corners, 0.141, cameraMatrix, distCoeffs, rvecs, tvecs);
         for(int i=0; i<ids.size(); i++)
@@ -215,7 +217,7 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
         pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
      
@@ -236,7 +238,6 @@ int main(int argc, char** argv)
    else {
    	if(initializing) {
    		ROS_INFO("Initializing");
-        Rotn.getRotation(Quatn);
         Quatn.normalize();
         double roll, pitch, yaw;
         tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
@@ -248,7 +249,7 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
         pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
      
@@ -265,11 +266,11 @@ int main(int argc, char** argv)
         path_6d.poses.push_back(pose_6d);
         path_publisher.publish(path_6d);   	
    	} else {
-   		if(sum_z < 0.4) {
-   			ROS_INFO("Drone flying below 40 cms, can't see markers");
+
+   			  ROS_INFO("Can't see marker for unknown reasons");
 	        Rotn.getRotation(Quatn);
 	        Quatn.normalize();
-	       double roll, pitch, yaw;
+	        double roll, pitch, yaw;
 	        tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
 	        //std::cout << roll*180/M_PI << "," << pitch*180/M_PI << "," << yaw*180/M_PI << std::endl;
 	        static tf::TransformBroadcaster br;
@@ -279,37 +280,7 @@ int main(int argc, char** argv)
 	                                         sum_z);
 	        transform.setOrigin(globalTranslation_rh);
 	        transform.setRotation(Quatn);
-	        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
-	        pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-	        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
-	     
-	        pose_6d.pose.position.x = 0;
-	        pose_6d.pose.position.y = 0;
-	        pose_6d.pose.position.z = 0;
-          	pose_6d.pose.orientation.x = 0;
-         	pose_6d.pose.orientation.y = 0;
-          	pose_6d.pose.orientation.z = 0;
-          	pose_6d.pose.orientation.w = 1;   
-
-
-	        pub_avg_pose.publish(pose_6d);
-	        path_6d.poses.push_back(pose_6d);
-	        path_publisher.publish(path_6d); 
-   		} else {
-   			ROS_INFO("Can't see marker for unknown reasons");
-	        Rotn.getRotation(Quatn);
-	        Quatn.normalize();
-	       double roll, pitch, yaw;
-	        tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
-	        //std::cout << roll*180/M_PI << "," << pitch*180/M_PI << "," << yaw*180/M_PI << std::endl;
-	        static tf::TransformBroadcaster br;
-	        tf::Transform transform;
-	        tf::Vector3 globalTranslation_rh(sum_x,
-	                                         sum_y,
-	                                         sum_z);
-	        transform.setOrigin(globalTranslation_rh);
-	        transform.setRotation(Quatn);
-	        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "Quadrotor_pose"));
+	        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
 	        pose_6d.header.frame_id = path_6d.header.frame_id = "map";
 	        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
 	     
@@ -321,11 +292,10 @@ int main(int argc, char** argv)
 	        pose_6d.pose.orientation.z = Quatn[2];
 	        pose_6d.pose.orientation.w = Quatn[3];
 
-
 	        pub_avg_pose.publish(pose_6d);
 	        path_6d.poses.push_back(pose_6d);
 	        path_publisher.publish(path_6d); 
-   		}
+
    	}
    }
    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();

@@ -52,7 +52,8 @@ int main(int argc, char** argv)
   image_transport::Subscriber image_sub_ = it_.subscribe("/skyviper/camera", 1, imageCallback);
   image_transport::Publisher image_pub_ = it_.advertise("/skyviper/camera/markers", 1);
   //ros::Publisher pub = nh_.advertise<geometry_msgs::PoseStamped>("/skyviper/pose",1000);
-  ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose",1000);
+  //ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose",1000);
+  ros::Publisher pub_avg_pose = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/mocap/pose",1000);
   ros::Publisher path_publisher = nh_.advertise<nav_msgs::Path>( "/skyviper/path", 1000);
 
 
@@ -111,6 +112,8 @@ int main(int argc, char** argv)
   int row, col;
   double sum_x, sum_y, sum_z, alpha_x, alpha_y, alpha_z, count;
   sum_x = sum_y = sum_z = 0;
+  sum_x = 0.5;
+  sum_y = 0.5;
   alpha_x = alpha_y = alpha_z = 0.1;
   count = 0;
   bool initializing = true;
@@ -233,8 +236,7 @@ int main(int argc, char** argv)
    }
    else{
     if(initializing) {
-      ROS_INFO("Initializing");
-        Rotn.getRotation(Quatn);
+        ROS_INFO("Initializing");
         Quatn.normalize();
         double roll, pitch, yaw;
         tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
