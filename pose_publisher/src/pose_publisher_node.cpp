@@ -31,13 +31,11 @@ using namespace std;
 
 using namespace cv;
 cv_bridge::CvImagePtr cv_ptr;
-ros::Time time_stamp;
 void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
   try
   {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-    time_stamp = msg->header.stamp;
     cv::waitKey(30);
   }
   catch (cv_bridge::Exception& e)
@@ -114,8 +112,8 @@ int main(int argc, char** argv)
   int row, col;
   double sum_x, sum_y, sum_z, alpha_x, alpha_y, alpha_z, count;
   sum_x = sum_y = sum_z = 0;
-  sum_x = 0.5;
-  sum_y = 0.5;
+  sum_x = 0.0;
+  sum_y = 0.0;
   alpha_x = alpha_y = alpha_z = 0.5;
   count = 0;
   bool initializing = true;
@@ -218,9 +216,9 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-        pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
+        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
      
         pose_6d.pose.position.x = sum_x;
         pose_6d.pose.position.y = sum_y;
@@ -250,9 +248,9 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-        pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
+        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
      
         pose_6d.pose.position.x = sum_x;
         pose_6d.pose.position.y = sum_y;
@@ -281,9 +279,9 @@ int main(int argc, char** argv)
                                            sum_z);
           transform.setOrigin(globalTranslation_rh);
           transform.setRotation(Quatn);
-          br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
+          br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
           pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-          pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
+          pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
        
           pose_6d.pose.position.x = sum_x;
           pose_6d.pose.position.y = sum_y;
@@ -310,9 +308,9 @@ int main(int argc, char** argv)
                                            sum_z);
           transform.setOrigin(globalTranslation_rh);
           transform.setRotation(Quatn);
-          br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
+          br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
           pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-          pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
+          pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
        
           pose_6d.pose.position.x = sum_x;
           pose_6d.pose.position.y = sum_y;
@@ -330,7 +328,7 @@ int main(int argc, char** argv)
    }
 
    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();
-   msg->header.stamp = time_stamp;
+   msg->header.stamp = ros::Time::now();
    image_pub_.publish(msg);
    }
    else
