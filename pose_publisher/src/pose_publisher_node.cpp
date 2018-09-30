@@ -114,7 +114,7 @@ int main(int argc, char** argv)
   sum_x = sum_y = sum_z = 0;
   sum_x = 0.0;
   sum_y = 0.0;
-  alpha_x = alpha_y = alpha_z = 0.5;
+  alpha_x = alpha_y = alpha_z = 0.1;
   count = 0;
   bool initializing = true;
   while(ros::ok())
@@ -128,6 +128,7 @@ int main(int argc, char** argv)
    // if at least one marker detected
    if (ids.size() > 0)
    {
+        ROS_INFO("Detecting markers");
         cv::aruco::drawDetectedMarkers(cv_ptr->image, corners, ids);
         cv::aruco::estimatePoseSingleMarkers(corners, 0.141, cameraMatrix, distCoeffs, rvecs, tvecs);
         for(int i=0; i<ids.size(); i++)
