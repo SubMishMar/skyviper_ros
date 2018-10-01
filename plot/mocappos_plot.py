@@ -7,7 +7,7 @@ x_mp = []
 y_mp = []
 z_mp = []
 
-with open('mocap_position.txt','r') as csvfile:
+with open('onlymocap__position.txt','r') as csvfile:
     lines = csv.reader(csvfile, delimiter=',')
     next(lines)
     for column in lines:
