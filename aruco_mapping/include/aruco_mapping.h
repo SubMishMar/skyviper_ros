@@ -56,6 +56,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <opencv2/tracking.hpp>
 // Custom message
 #include <aruco_mapping/ArucoMarker.h>
 
@@ -93,6 +94,15 @@ public:
   /** \brief Callback function to handle image processing*/
   void imageCallback(const sensor_msgs::ImageConstPtr &original_image);
 
+  // Initialize the Kalman Filter
+  void initKalmanFilter(cv::KalmanFilter &KF, int nStates, int nMeasurements, int nInputs, double dt);
+  void fillMeasurements( cv::Mat &measurements, const cv::Mat &translation_measured, 
+                         const tf::Quaternion &quat_measured);
+  void updateKalmanFilter( cv::KalmanFilter &KF, cv::Mat &measurement,
+                           cv::Mat &translation_estimated, tf::Quaternion &quaternion_estimated );
+  void updateKalmanFilter( cv::KalmanFilter &KF,
+                                       cv::Mat &translation_estimated, 
+                                       tf::Quaternion &quaternion_estimated );
 private:
   
   /** \brief Function to parse data from calibration file*/
@@ -112,6 +122,7 @@ private:
 
   /** \pose publisher */
   ros::Publisher global_pose_publisher_;
+  ros::Publisher global_pose_publisher_kf_;
 
   /** \brief Compute TF from marker detector result*/
   tf::Transform arucoMarker2Tf(const aruco::Marker &marker);
@@ -142,6 +153,7 @@ private:
   /** \brief Actual Pose of camera with respect to world's origin */
   geometry_msgs::Pose world_position_geometry_msg_;
   geometry_msgs::PoseStamped world_posestamped_msgs_;
+  geometry_msgs::PoseStamped world_posestamped_msgs_kf_;
 
   aruco::CameraParameters aruco_calib_params_;
 
@@ -153,6 +165,11 @@ private:
   
   tf::TransformListener *listener_;
   tf::TransformBroadcaster broadcaster_;
+
+  // Kalman Filter
+  cv::KalmanFilter KF;
+  int nStates, nMeasurements, nInputs;
+  double dt;
 
   //Consts
    static const int CV_WAIT_KEY = 10;

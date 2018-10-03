@@ -17,7 +17,8 @@
   <!-- ArUco mapping -->
   <node pkg="aruco_mapping" type="aruco_mapping" name="aruco_mapping" output="screen">
     <remap from="/image_raw" to="/skyviper/camera"/>
-    <remap from="/global_pose" to="/mavros/mocap/pose"/>
+    <remap from="/global_pose_kf" to="/mavros/mocap/pose"/>
+    <!--<remap from="/global_pose" to="/mavros/mocap/pose"/>-->
     <param name="calibration_file" type="string" value="$(find aruco_mapping)/data/sv_bl.ini" /> 
     <!--<param name="calibration_file" type="string" value="$(find aruco_mapping)/data/sv_gripen.ini" />--> 
     <param name="num_of_markers" type="int" value="5" />

@@ -10,6 +10,7 @@ Panels:
         - /Marker1
         - /TF1
         - /TF1/Frames1
+        - /Pose3
       Splitter Ratio: 0.510066986
     Tree Height: 369
   - Class: rviz/Selection
@@ -57,7 +58,7 @@ Visualization Manager:
       Marker Topic: /aruco_markers
       Name: Marker
       Namespaces:
-        basic_shapes: true
+        {}
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -80,39 +81,17 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        camera_0:
-          Value: false
-        camera_1:
-          Value: false
-        camera_2:
-          Value: false
-        camera_3:
-          Value: false
-        camera_4:
-          Value: false
-        camera_position:
-          Value: false
-        marker_0:
-          Value: false
-        marker_1:
-          Value: false
-        marker_2:
-          Value: false
-        marker_3:
-          Value: false
-        marker_4:
-          Value: false
-        marker_globe_0:
-          Value: false
-        marker_globe_1:
-          Value: false
-        marker_globe_2:
-          Value: false
-        marker_globe_3:
-          Value: false
-        marker_globe_4:
-          Value: false
-        world:
+        fcu:
+          Value: true
+        fcu_frd:
+          Value: true
+        local_origin:
+          Value: true
+        local_origin_ned:
+          Value: true
+        local_position:
+          Value: true
+        map:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -120,33 +99,8 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        world:
-          camera_position:
-            {}
-          marker_0:
-            camera_0:
-              {}
-            marker_1:
-              camera_1:
-                {}
-            marker_2:
-              camera_2:
-                {}
-            marker_3:
-              camera_3:
-                {}
-            marker_4:
-              camera_4:
-                {}
-          marker_globe_0:
-            {}
-          marker_globe_1:
-            {}
-          marker_globe_2:
-            {}
-          marker_globe_3:
-            {}
-          marker_globe_4:
+        map:
+          local_position:
             {}
       Update Interval: 0
       Value: true
@@ -167,7 +121,7 @@ Visualization Manager:
       Axes Radius: 0.100000001
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: true
+      Enabled: false
       Head Length: 0.300000012
       Head Radius: 0.100000001
       Name: Pose
@@ -176,12 +130,27 @@ Visualization Manager:
       Shape: Arrow
       Topic: /mavros/mocap/pose
       Unreliable: false
+      Value: false
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.100000001
+      Class: rviz/Pose
+      Color: 0; 85; 0
+      Enabled: true
+      Head Length: 0.300000012
+      Head Radius: 0.100000001
+      Name: Pose
+      Shaft Length: 1
+      Shaft Radius: 0.0500000007
+      Shape: Arrow
+      Topic: /global_pose_kf
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
     Default Light: true
-    Fixed Frame: world
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
@@ -202,7 +171,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 4.46228361
+      Distance: 4.64813471
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
@@ -217,10 +186,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.32979655
+      Pitch: 1.56979632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.07220769
+      Yaw: 3.19221187
     Saved: ~
 Window Geometry:
   Displays:

@@ -55,6 +55,14 @@ ArucoMapping::ArucoMapping(ros::NodeHandle *nh) :
   px = py = pz = 0;
   qx = qy = qz = 0;
   qw = 1;
+
+  nStates = 18;
+  nMeasurements = 6;
+  nInputs = 0;
+  dt = 0.1;
+  // dt = 1/30;
+  initKalmanFilter(KF, nStates, nMeasurements, nInputs, dt);
+  
   double temp_marker_size;  
   
   //Parse params from launch file 
@@ -89,12 +97,13 @@ ArucoMapping::ArucoMapping(ros::NodeHandle *nh) :
   //ROS publishers
   marker_msg_pub_           = nh->advertise<aruco_mapping::ArucoMarker>("aruco_poses",1);
   marker_visualization_pub_ = nh->advertise<visualization_msgs::Marker>("aruco_markers",1);
-  global_pose_publisher_ = nh->advertise<geometry_msgs::PoseStamped>("/global_pose",1);    
+  global_pose_publisher_ = nh->advertise<geometry_msgs::PoseStamped>("/global_pose",1);  
+  global_pose_publisher_kf_ = nh->advertise<geometry_msgs::PoseStamped>("/global_pose_kf",1);
   //Parse data from calibration file
   parseCalibrationFile(calib_filename_);
 
   //Initialize OpenCV window
-  cv::namedWindow("Mono8", CV_WINDOW_AUTOSIZE);       
+  // cv::namedWindow("Mono8", CV_WINDOW_AUTOSIZE);       
       
   //Resize marker container
   markers_.resize(num_of_markers_);
@@ -111,6 +120,124 @@ ArucoMapping::ArucoMapping(ros::NodeHandle *nh) :
 ArucoMapping::~ArucoMapping()
 {
  delete listener_;
+}
+
+void ArucoMapping::initKalmanFilter(cv::KalmanFilter &KF, int nStates, int nMeasurements, int nInputs, double dt)
+{
+  KF.init(nStates, nMeasurements, nInputs, CV_64F);                 // init Kalman Filter
+  cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-5));       // set process noise
+  cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-4));   // set measurement noise
+  cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));             // error covariance
+                 /* DYNAMIC MODEL */
+  //  [1 0 0 dt  0  0 dt2   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 1 0  0 dt  0   0 dt2   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 1  0  0 dt   0   0 dt2 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  1  0  0  dt   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  1  0   0  dt   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  1   0   0  dt 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   1   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   1   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   0   1 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   0   0 1 0 0 dt  0  0 dt2   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 1 0  0 dt  0   0 dt2   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 1  0  0 dt   0   0 dt2]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  1  0  0  dt   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  1  0   0  dt   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  1   0   0  dt]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   1   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   0   1   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   0   0   1]
+
+  // position
+  KF.transitionMatrix.at<double>(0,3) = dt;
+  KF.transitionMatrix.at<double>(1,4) = dt;
+  KF.transitionMatrix.at<double>(2,5) = dt;
+  KF.transitionMatrix.at<double>(3,6) = dt;
+  KF.transitionMatrix.at<double>(4,7) = dt;
+  KF.transitionMatrix.at<double>(5,8) = dt;
+  KF.transitionMatrix.at<double>(0,6) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(1,7) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(2,8) = 0.5*pow(dt,2);
+
+  // orientation
+  KF.transitionMatrix.at<double>(9,12) = dt;
+  KF.transitionMatrix.at<double>(10,13) = dt;
+  KF.transitionMatrix.at<double>(11,14) = dt;
+  KF.transitionMatrix.at<double>(12,15) = dt;
+  KF.transitionMatrix.at<double>(13,16) = dt;
+  KF.transitionMatrix.at<double>(14,17) = dt;
+  KF.transitionMatrix.at<double>(9,15) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(10,16) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(11,17) = 0.5*pow(dt,2);
+
+       /* MEASUREMENT MODEL */
+  //  [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]
+
+  KF.measurementMatrix.at<double>(0,0) = 1;  // x
+  KF.measurementMatrix.at<double>(1,1) = 1;  // y
+  KF.measurementMatrix.at<double>(2,2) = 1;  // z
+  KF.measurementMatrix.at<double>(3,9) = 1;  // roll
+  KF.measurementMatrix.at<double>(4,10) = 1; // pitch
+  KF.measurementMatrix.at<double>(5,11) = 1; // yaw
+}
+
+void ArucoMapping::fillMeasurements( cv::Mat &measurements,
+                   const cv::Mat &translation_measured, const tf::Quaternion &quat_measured)
+{
+    double roll, pitch, yaw;
+    tf::Matrix3x3(quat_measured).getRPY(roll, pitch, yaw);
+    // Set measurement to predict
+    measurements.at<double>(0) = translation_measured.at<double>(0); // x
+    measurements.at<double>(1) = translation_measured.at<double>(1); // y
+    measurements.at<double>(2) = translation_measured.at<double>(2); // z
+    measurements.at<double>(3) = roll;      // roll
+    measurements.at<double>(4) = pitch;      // pitch
+    measurements.at<double>(5) = yaw;      // yaw
+}
+
+void ArucoMapping::updateKalmanFilter( cv::KalmanFilter &KF, cv::Mat &measurement,
+                     cv::Mat &translation_estimated, tf::Quaternion &quaternion_estimated )
+{
+    // First predict, to update the internal statePre variable
+    cv::Mat prediction = KF.predict();
+    // The "correct" phase that is going to use the predicted value and our measurement
+    cv::Mat estimated = KF.correct(measurement);
+    // Estimated translation
+    translation_estimated.at<double>(0) = estimated.at<double>(0);
+    translation_estimated.at<double>(1) = estimated.at<double>(1);
+    translation_estimated.at<double>(2) = estimated.at<double>(2);
+    // Estimated euler angles
+    double roll, pitch, yaw;
+    roll = estimated.at<double>(9);
+    pitch = estimated.at<double>(10);
+    yaw = estimated.at<double>(11);
+    // Convert euler angles to quaternions
+    quaternion_estimated.setRPY(roll, pitch, yaw);
+}
+
+void ArucoMapping::updateKalmanFilter( cv::KalmanFilter &KF,
+                                       cv::Mat &translation_estimated, 
+                                       tf::Quaternion &quaternion_estimated )
+{
+    // First predict, to update the internal statePre variable
+    cv::Mat prediction = KF.predict();
+
+    // Estimated translation
+    translation_estimated.at<double>(0) = prediction.at<double>(0);
+    translation_estimated.at<double>(1) = prediction.at<double>(1);
+    translation_estimated.at<double>(2) = prediction.at<double>(2);
+    // Estimated euler angles
+    double roll, pitch, yaw;
+    roll = prediction.at<double>(9);
+    pitch = prediction.at<double>(10);
+    yaw = prediction.at<double>(11);
+    // Convert euler angles to quaternions
+    quaternion_estimated.setRPY(roll, pitch, yaw);
 }
 
 bool
@@ -184,8 +311,8 @@ ArucoMapping::imageCallback(const sensor_msgs::ImageConstPtr &original_image)
   processImage(I,I);
   
   // Show image
-  cv::imshow("Mono8", I);
-  cv::waitKey(10);  
+  // cv::imshow("Mono8", I);
+  // cv::waitKey(10);  
 }
 
 
@@ -493,11 +620,11 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
       std::stringstream marker_tf_name;
       marker_tf_name << "marker_" << index;
 
-      listener_->waitForTransform("world",marker_tf_name.str(),ros::Time(0),
+      listener_->waitForTransform("map",marker_tf_name.str(),ros::Time(0),
                                   ros::Duration(WAIT_FOR_TRANSFORM_INTERVAL));
       try
       {
-        listener_->lookupTransform("world",marker_tf_name.str(),ros::Time(0),
+        listener_->lookupTransform("map",marker_tf_name.str(),ros::Time(0),
                                    markers_[index].tf_to_world);
       }
       catch(tf::TransformException &e)
@@ -569,11 +696,11 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     std::stringstream closest_camera_tf_name;
     closest_camera_tf_name << "camera_" << closest_camera_index_;
 
-    listener_->waitForTransform("world",closest_camera_tf_name.str(),ros::Time(0),
+    listener_->waitForTransform("map",closest_camera_tf_name.str(),ros::Time(0),
                                 ros::Duration(WAIT_FOR_TRANSFORM_INTERVAL));
     try
     {
-      listener_->lookupTransform("world",closest_camera_tf_name.str(),ros::Time(0),
+      listener_->lookupTransform("map",closest_camera_tf_name.str(),ros::Time(0),
                                  world_position_transform_);
     }
     catch(tf::TransformException &ex)
@@ -584,7 +711,7 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     // Saving TF to Pose
     marker_origin = world_position_transform_.getOrigin();
     world_posestamped_msgs_.header.stamp = ros::Time::now();
-    world_posestamped_msgs_.header.frame_id = "world";
+    world_posestamped_msgs_.header.frame_id = "map";
     px = marker_origin.getX();
     py = marker_origin.getY();
     pz = marker_origin.getZ();
@@ -610,6 +737,35 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     world_posestamped_msgs_.pose.orientation.y = qy;
     world_posestamped_msgs_.pose.orientation.z = qz;
     world_posestamped_msgs_.pose.orientation.w = qw;
+
+    cv::Mat translation_measured(3, 1, CV_64F);
+    translation_measured.at<double>(0) = px;
+    translation_measured.at<double>(1) = py;
+    translation_measured.at<double>(2) = pz;
+
+    cv::Mat measurements(6, 1, CV_64F);
+    fillMeasurements(measurements, translation_measured, quat);
+    // Instantiate estimated translation and rotation
+    cv::Mat translation_estimated(3, 1, CV_64F);
+    cv::Mat rotation_estimated(3, 3, CV_64F);
+    // update the Kalman filter with good measurements
+    tf::Quaternion quaternion_estimated;
+    updateKalmanFilter( KF, measurements,
+                  translation_estimated, quaternion_estimated);
+    quaternion_estimated.normalize();
+
+    world_posestamped_msgs_kf_.header.stamp = ros::Time::now();
+    world_posestamped_msgs_kf_.header.frame_id = "map";
+
+    world_posestamped_msgs_kf_.pose.position.x = translation_estimated.at<double>(0);
+    world_posestamped_msgs_kf_.pose.position.y = translation_estimated.at<double>(1);
+    world_posestamped_msgs_kf_.pose.position.z = translation_estimated.at<double>(2);
+
+    world_posestamped_msgs_kf_.pose.orientation.x = quaternion_estimated.getX();
+    world_posestamped_msgs_kf_.pose.orientation.y = quaternion_estimated.getY();
+    world_posestamped_msgs_kf_.pose.orientation.z = quaternion_estimated.getZ();
+    world_posestamped_msgs_kf_.pose.orientation.w = quaternion_estimated.getW();
+
   }
 
   //------------------------------------------------------
@@ -626,7 +782,7 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
   if((any_markers_visible == true))
   {
     marker_msg.header.stamp = ros::Time::now();
-    marker_msg.header.frame_id = "world";
+    marker_msg.header.frame_id = "map";
     marker_msg.marker_visibile = true;
     marker_msg.num_of_visible_markers = num_of_visible_markers;
     marker_msg.global_camera_pose = world_position_geometry_msg_;
@@ -644,13 +800,13 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
   else
   {
     marker_msg.header.stamp = ros::Time::now();
-    marker_msg.header.frame_id = "world";
+    marker_msg.header.frame_id = "map";
     marker_msg.num_of_visible_markers = num_of_visible_markers;
     marker_msg.marker_visibile = false;
     marker_msg.marker_ids.clear();
     marker_msg.global_marker_poses.clear();
     world_posestamped_msgs_.header.stamp = ros::Time::now();
-    world_posestamped_msgs_.header.frame_id = "world";
+    world_posestamped_msgs_.header.frame_id = "map";
     world_posestamped_msgs_.pose.position.x = px;
     world_posestamped_msgs_.pose.position.y = py;
     world_posestamped_msgs_.pose.position.z = pz;   
@@ -658,11 +814,31 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     world_posestamped_msgs_.pose.orientation.y = qy;
     world_posestamped_msgs_.pose.orientation.z = qz;
     world_posestamped_msgs_.pose.orientation.w = qw;
+
+
+    cv::Mat translation_estimated(3, 1, CV_64F);
+    cv::Mat rotation_estimated(3, 3, CV_64F);
+    tf::Quaternion quaternion_estimated;
+    updateKalmanFilter( KF, translation_estimated, quaternion_estimated);
+    quaternion_estimated.normalize();
+
+    world_posestamped_msgs_kf_.header.stamp = ros::Time::now();
+    world_posestamped_msgs_kf_.header.frame_id = "map";
+
+    world_posestamped_msgs_kf_.pose.position.x = translation_estimated.at<double>(0);
+    world_posestamped_msgs_kf_.pose.position.y = translation_estimated.at<double>(1);
+    world_posestamped_msgs_kf_.pose.position.z = translation_estimated.at<double>(2);
+
+    world_posestamped_msgs_kf_.pose.orientation.x = quaternion_estimated.getX();
+    world_posestamped_msgs_kf_.pose.orientation.y = quaternion_estimated.getY();
+    world_posestamped_msgs_kf_.pose.orientation.z = quaternion_estimated.getZ();
+    world_posestamped_msgs_kf_.pose.orientation.w = quaternion_estimated.getW();
   }
 
   // Publish custom marker msg
   marker_msg_pub_.publish(marker_msg);
   global_pose_publisher_.publish(world_posestamped_msgs_);
+  global_pose_publisher_kf_.publish(world_posestamped_msgs_kf_);
   return true;
 }
 
@@ -679,7 +855,7 @@ ArucoMapping::publishTfs(bool world_option)
     // Older marker - or World
     std::stringstream marker_tf_id_old;
     if(i == 0)
-      marker_tf_id_old << "world";
+      marker_tf_id_old << "map";
     else
       marker_tf_id_old << "marker_" << markers_[i].previous_marker_id;
     broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_previous,ros::Time::now(),marker_tf_id_old.str(),marker_tf_id.str()));
@@ -694,7 +870,7 @@ ArucoMapping::publishTfs(bool world_option)
       // Global position of marker TF
       std::stringstream marker_globe;
       marker_globe << "marker_globe_" << i;
-      broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_world,ros::Time::now(),"world",marker_globe.str()));
+      broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_world,ros::Time::now(),"map",marker_globe.str()));
     }
 
     // Cubes for RVIZ - markers
@@ -703,7 +879,7 @@ ArucoMapping::publishTfs(bool world_option)
 
   // Global Position of object
   if(world_option == true)
-    broadcaster_.sendTransform(tf::StampedTransform(world_position_transform_,ros::Time::now(),"world","camera_position"));
+    broadcaster_.sendTransform(tf::StampedTransform(world_position_transform_,ros::Time::now(),"map","camera_position"));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -714,7 +890,7 @@ ArucoMapping::publishMarker(geometry_msgs::Pose marker_pose, int marker_id, int 
   visualization_msgs::Marker vis_marker;
 
   if(index == 0)
-    vis_marker.header.frame_id = "world";
+    vis_marker.header.frame_id = "map";
   else
   {
     std::stringstream marker_tf_id_old;
