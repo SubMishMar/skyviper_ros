@@ -77,7 +77,7 @@ int main(int argc, char** argv)
   fs["intrinsics"] >> cameraMatrix;
   fs["distortion_coefficients"] >> distCoeffs;
 
-  ros::Rate loop_rate(30);
+  ros::Rate loop_rate(10);
   sensor_msgs::ImagePtr msg;
 
   cv::Ptr<cv::aruco::Dictionary> dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -107,10 +107,10 @@ int main(int argc, char** argv)
   nav_msgs::Path path_6d;
   
   
-  double n_rows = 10;
-  double n_cols = 10;
-  double dx = 8.5*0.0254;
-  double dy = 11*0.0254;
+  int n_x = 10;
+  int n_y = 6;
+  double dx = 0.2159;
+  double dy = 0.2794;
   int row, col;
   double sum_x, sum_y, sum_z, alpha_x, alpha_y, alpha_z, count;
   sum_x = sum_y = sum_z = 0;
@@ -123,6 +123,7 @@ int main(int argc, char** argv)
 
   cv::Ptr<aruco::DetectorParameters> params = aruco::DetectorParameters::create();
   //params->minMarkerDistanceRate = 0.5;
+  cv::namedWindow("Display Window", WINDOW_AUTOSIZE);
   while(ros::ok())
   {
    if(cv_ptr)
@@ -169,26 +170,35 @@ int main(int argc, char** argv)
          }
         }
         dists.clear();
-        std::cout << ids[lo] << std::endl;
-        //cv::aruco::drawAxis(cv_ptr->image, cameraMatrix, distCoeffs, rvecs[lo], tvecs[lo], 0.1);
+        //std::cout << ids[lo] << std::endl;
+        cv::aruco::drawAxis(cv_ptr->image, cameraMatrix, distCoeffs, rvecs[lo], tvecs[lo], 0.1);
 
         cv::Rodrigues(rvecs[lo], r_cw, cv::noArray());
         cv::hconcat(r_cw, tvecs[lo], rt_cw);
         cv::vconcat(rt_cw, last_row, T_cw);
-        row = ceil(ids[lo]/n_cols);
-        col = ids[lo] - (row - 1)*n_cols;
-        row = row - 1;
-        col = col - 1;
+        // row = ceil(ids[lo]/n_cols);
+        // col = ids[lo] - (row - 1)*n_cols;
+        // row = row - 1;
+        // col = col - 1;
+        int id = ids[lo] - 1;
+        int quotient = id / n_x;
+        int remainder = id % n_x;
         /* 
         double data_Rpremul[4][4] = {{1, 0, 0, col*dx + 0.037 + 0.0705}, 
                         {0, 1, 0, row*dy + 0.074 + 0.0705}, 
                         {0, 0, 1, 0}, 
                         {0, 0, 0, 1}};
         */
-        double data_Rpremul[4][4] = {{1, 0, 0, col*dx + 0.037 + 0.0705}, 
-                        {0, 1, 0, row*dy + 0.074 + 0.0705}, 
-                        {0, 0, 1, 0}, 
-                        {0, 0, 0, 1}};
+        // double data_Rpremul[4][4] = {{1, 0, 0, col*dx + 0.037 + 0.0705}, 
+        //                 {0, 1, 0, row*dy + 0.074 + 0.0705}, 
+        //                 {0, 0, 1, 0}, 
+        //                 {0, 0, 0, 1}};
+        double data_Rpremul[4][4] = {{1, 0, 0, remainder*dx}, 
+                                     {0, 1, 0, quotient*dy}, 
+                                     {0, 0, 1, 0}, 
+                                     {0, 0, 0, 1}};
+        //std::cout << id << "\t" << remainder << "\t" << quotient << std::endl;
+        //std::cout << ids.size() << "\t" << id+1 << std::endl;
         cv::Mat Tpremul = cv::Mat(4, 4, CV_64F, data_Rpremul);
         T_wc_transformed = Tpremul*T_cw.inv()*transformation;
 
@@ -238,6 +248,12 @@ int main(int argc, char** argv)
         pub_avg_pose.publish(pose_6d);
         path_6d.poses.push_back(pose_6d);
         path_publisher.publish(path_6d);
+        char str[200];
+        sprintf(str, "no of markers %d and id %d",ids.size(), id+1);
+        putText(cv_ptr->image, str, Point2f(100,100), 
+        	FONT_HERSHEY_SIMPLEX, 1,  Scalar(0,0,255,255));
+        cv::imshow("Display Window", cv_ptr->image);
+        cv::waitKey(10);
         initializing = false;
    }
    else{
@@ -272,6 +288,7 @@ int main(int argc, char** argv)
         path_publisher.publish(path_6d);    
     } 
    }
+
    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();
    msg->header.stamp = time_stamp;
    image_pub_.publish(msg);
