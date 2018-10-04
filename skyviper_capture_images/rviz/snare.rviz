@@ -58,15 +58,7 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        Quadrotor_pose:
-          Value: true
-        fcu:
-          Value: true
-        fcu_frd:
-          Value: true
-        local_origin:
-          Value: true
-        local_origin_ned:
+        base_link:
           Value: true
         map:
           Value: true
@@ -77,7 +69,7 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          Quadrotor_pose:
+          base_link:
             {}
       Update Interval: 0
       Value: true
@@ -135,7 +127,7 @@ Visualization Manager:
       Axes Length: 1
       Axes Radius: 0.100000001
       Class: rviz/Pose
-      Color: 255; 25; 0
+      Color: 0; 85; 0
       Enabled: true
       Head Length: 0.300000012
       Head Radius: 0.100000001
@@ -144,6 +136,21 @@ Visualization Manager:
       Shaft Radius: 0.0500000007
       Shape: Arrow
       Topic: /mavros/local_position/pose
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.100000001
+      Class: rviz/Pose
+      Color: 255; 25; 0
+      Enabled: true
+      Head Length: 0.300000012
+      Head Radius: 0.100000001
+      Name: Pose
+      Shaft Length: 1
+      Shaft Radius: 0.0500000007
+      Shape: Arrow
+      Topic: /mavros/mocap/pose
       Unreliable: false
       Value: true
   Enabled: true
@@ -171,25 +178,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 5.02530575
+      Distance: 7.84341574
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: 0.883986235
+        Y: -0.128410891
+        Z: 0.000886161346
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.479797602
+      Pitch: 1.56979632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.278565943
+      Yaw: 4.3085804
     Saved: ~
 Window Geometry:
   Displays:

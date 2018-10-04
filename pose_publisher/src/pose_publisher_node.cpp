@@ -31,11 +31,13 @@ using namespace std;
 
 using namespace cv;
 cv_bridge::CvImagePtr cv_ptr;
+ros::Time time_stamp;
 void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
   try
   {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+    time_stamp = msg->header.stamp;
     cv::waitKey(30);
   }
   catch (cv_bridge::Exception& e)
@@ -114,21 +116,24 @@ int main(int argc, char** argv)
   sum_x = sum_y = sum_z = 0;
   sum_x = 0.0;
   sum_y = 0.0;
-  alpha_x = alpha_y = alpha_z = 0.1;
+  alpha_x = alpha_y = 1;
+  alpha_z = 1;
   count = 0;
   bool initializing = true;
+
+  cv::Ptr<aruco::DetectorParameters> params = aruco::DetectorParameters::create();
+  //params->minMarkerDistanceRate = 0.5;
   while(ros::ok())
   {
    if(cv_ptr)
    {
    c_y = (cv_ptr->image.rows - 1)/2;
    c_x = (cv_ptr->image.cols - 1)/2;
-   cv::aruco::detectMarkers(cv_ptr->image, dictionary, corners, ids);
+   cv::aruco::detectMarkers(cv_ptr->image, dictionary, corners, ids, params);
 
    // if at least one marker detected
    if (ids.size() > 0)
    {
-        ROS_INFO("Detecting markers");
         cv::aruco::drawDetectedMarkers(cv_ptr->image, corners, ids);
         cv::aruco::estimatePoseSingleMarkers(corners, 0.141, cameraMatrix, distCoeffs, rvecs, tvecs);
         for(int i=0; i<ids.size(); i++)
@@ -164,8 +169,8 @@ int main(int argc, char** argv)
          }
         }
         dists.clear();
-        //std::cout << corners[lo] << std::endl;
-        cv::aruco::drawAxis(cv_ptr->image, cameraMatrix, distCoeffs, rvecs[lo], tvecs[lo], 0.1);
+        std::cout << ids[lo] << std::endl;
+        //cv::aruco::drawAxis(cv_ptr->image, cameraMatrix, distCoeffs, rvecs[lo], tvecs[lo], 0.1);
 
         cv::Rodrigues(rvecs[lo], r_cw, cv::noArray());
         cv::hconcat(r_cw, tvecs[lo], rt_cw);
@@ -174,7 +179,7 @@ int main(int argc, char** argv)
         col = ids[lo] - (row - 1)*n_cols;
         row = row - 1;
         col = col - 1;
-        /*
+        /* 
         double data_Rpremul[4][4] = {{1, 0, 0, col*dx + 0.037 + 0.0705}, 
                         {0, 1, 0, row*dy + 0.074 + 0.0705}, 
                         {0, 0, 1, 0}, 
@@ -217,9 +222,9 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
+        br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
+        pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
      
         pose_6d.pose.position.x = sum_x;
         pose_6d.pose.position.y = sum_y;
@@ -249,9 +254,9 @@ int main(int argc, char** argv)
                                          sum_z);
         transform.setOrigin(globalTranslation_rh);
         transform.setRotation(Quatn);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
+        br.sendTransform(tf::StampedTransform(transform, time_stamp, "map", "base_link"));
         pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-        pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
+        pose_6d.header.stamp = path_6d.header.stamp = time_stamp;
      
         pose_6d.pose.position.x = sum_x;
         pose_6d.pose.position.y = sum_y;
@@ -265,71 +270,10 @@ int main(int argc, char** argv)
         pub_avg_pose.publish(pose_6d);
         path_6d.poses.push_back(pose_6d);
         path_publisher.publish(path_6d);    
-    } else {
-      if(sum_z < 0.4) {
-          ROS_INFO("Drone flying below 40 cms, can't see markers");
-          Rotn.getRotation(Quatn);
-          Quatn.normalize();
-          double roll, pitch, yaw;
-          tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
-          //std::cout << roll*180/M_PI << "," << pitch*180/M_PI << "," << yaw*180/M_PI << std::endl;
-          static tf::TransformBroadcaster br;
-          tf::Transform transform;
-          tf::Vector3 globalTranslation_rh(sum_x,
-                                           sum_y,
-                                           sum_z);
-          transform.setOrigin(globalTranslation_rh);
-          transform.setRotation(Quatn);
-          br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
-          pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-          pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
-       
-          pose_6d.pose.position.x = sum_x;
-          pose_6d.pose.position.y = sum_y;
-          pose_6d.pose.position.z = 0;
-          pose_6d.pose.orientation.x = Quatn[0];
-          pose_6d.pose.orientation.y = Quatn[1];
-          pose_6d.pose.orientation.z = Quatn[2];
-          pose_6d.pose.orientation.w = Quatn[3];  
-
-          pub_avg_pose.publish(pose_6d);
-          path_6d.poses.push_back(pose_6d);
-          path_publisher.publish(path_6d); 
-      } else {
-          ROS_INFO("Can't see marker for unknown reasons");
-          Rotn.getRotation(Quatn);
-          Quatn.normalize();
-          double roll, pitch, yaw;
-          tf::Matrix3x3(Quatn).getRPY(roll, pitch, yaw);
-          //std::cout << roll*180/M_PI << "," << pitch*180/M_PI << "," << yaw*180/M_PI << std::endl;
-          static tf::TransformBroadcaster br;
-          tf::Transform transform;
-          tf::Vector3 globalTranslation_rh(sum_x,
-                                           sum_y,
-                                           sum_z);
-          transform.setOrigin(globalTranslation_rh);
-          transform.setRotation(Quatn);
-          br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
-          pose_6d.header.frame_id = path_6d.header.frame_id = "map";
-          pose_6d.header.stamp = path_6d.header.stamp = ros::Time::now();
-       
-          pose_6d.pose.position.x = sum_x;
-          pose_6d.pose.position.y = sum_y;
-          pose_6d.pose.position.z = sum_z;
-          pose_6d.pose.orientation.x = Quatn[0];
-          pose_6d.pose.orientation.y = Quatn[1];
-          pose_6d.pose.orientation.z = Quatn[2];
-          pose_6d.pose.orientation.w = Quatn[3];  
-
-          pub_avg_pose.publish(pose_6d);
-          path_6d.poses.push_back(pose_6d);
-          path_publisher.publish(path_6d); 
-      }
-    }        
+    } 
    }
-
    msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", cv_ptr->image).toImageMsg();
-   msg->header.stamp = ros::Time::now();
+   msg->header.stamp = time_stamp;
    image_pub_.publish(msg);
    }
    else
