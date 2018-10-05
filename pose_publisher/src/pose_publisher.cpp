@@ -1,6 +1,6 @@
 #include "pose_publisher.h"
 PoseEstimator::PoseEstimator(ros::NodeHandle nh, image_transport::ImageTransport it):nh_(nh) { 
-	image_sub_ = it.subscribe("/skyviper/camera", 1, &PoseEstimator::imageCallback, this);
+	image_sub_ = it.subscribe("/skyviper/camera", 10, &PoseEstimator::imageCallback, this);
 	image_pub_ = it.advertise("/skyviper/camera/markers", 1);
 	pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/mocap/pose", 100);
 	path_pub_ = nh_.advertise<nav_msgs::Path>("/skyviper/path", 100);
@@ -8,8 +8,23 @@ PoseEstimator::PoseEstimator(ros::NodeHandle nh, image_transport::ImageTransport
 	dx = 0.2159;
     dy = 0.2794;
     n_x = 10;
-    show_image = false;
-    if(show_image)
+
+    nStates_ = 18;
+    nMeasurements_ = 6;
+    nInputs_ = 0;
+    dt_ = 0.1;
+
+    initKalmanFilter(KF_, nStates_, nMeasurements_, nInputs_, dt_);
+	translation_measured_ = translation_estimated_ = 
+	cv::Mat::zeros(cv::Size(3, 1), CV_64FC1);
+    x_init_ = 4*dx;
+    y_init_ = 2*dy;
+    z_init_ = 0;
+
+    count_ = 0;
+    show_image_ = false;
+    initializing_ = true;
+    if(show_image_)
 		cv::namedWindow("Display window");
 	paramReader();
 }
@@ -49,7 +64,7 @@ void PoseEstimator::imageCallback(const sensor_msgs::ImageConstPtr& msg) {
 
 void PoseEstimator::arucoFactory() {
 	estimatePose();
-	if(show_image) {
+	if(show_image_) {
 		cv::imshow("Display window", image_);
 		cv::waitKey(30);		
 	}
@@ -74,32 +89,50 @@ void PoseEstimator::estimatePose() {
 		std::tuple<cv::Point3d, tf::Quaternion> TQ = getTQ(T_WC);
 		cv::Point3d translation = std::get< 0 >(TQ);
 		tf::Quaternion quatn = std::get< 1 >(TQ);
-        static tf::TransformBroadcaster br;
-        tf::Transform transform;
+
+
         double px, py, pz;
         px = translation.x;
         py = translation.y;
         pz = translation.z;
-        tf::Vector3 globalTranslation_rh(px,
-                                         py,
-                                         pz);
-        transform.setOrigin(globalTranslation_rh);
-        transform.setRotation(quatn);
-        br.sendTransform(tf::StampedTransform(transform, time_stamp_, "map", "base_link"));
 
-        pose_6d_.header.frame_id = path_6d_.header.frame_id = "map";
-        pose_6d_.header.stamp = path_6d_.header.stamp = time_stamp_;
-     
-        pose_6d_.pose.position.x = px;
-        pose_6d_.pose.position.y = py;
-        pose_6d_.pose.position.z = pz;
-        pose_6d_.pose.orientation.x = quatn[0];
-        pose_6d_.pose.orientation.y = quatn[1];
-        pose_6d_.pose.orientation.z = quatn[2];
-		pose_6d_.pose.orientation.w = quatn[3]; 
-		pose_pub_.publish(pose_6d_);
-		path_6d_.poses.push_back(pose_6d_);
-		path_pub_.publish(path_6d_);
+    	translation_measured_.at<double>(0) = px;
+    	translation_measured_.at<double>(1) = py;
+		translation_measured_.at<double>(2) = pz; 
+		cv::Mat measurements(6, 1, CV_64F);
+		fillMeasurements(measurements, translation_measured_, quatn);
+	    // Instantiate estimated translation and rotation
+	    cv::Mat rotation_estimated(3, 3, CV_64F);
+        updateKalmanFilter( KF_, 
+        	                measurements,
+                            translation_estimated_, 
+                            quaternion_estimated_);
+       	quaternion_estimated_.normalize(); 
+
+        publishPose(translation_estimated_, quaternion_estimated_);
+
+		initializing_ = false;
+		count_ = 0;
+	} else {
+		if(!initializing_) {
+			std::cout << count_ << std::endl;
+			if(count_ <= 10) {
+				updateKalmanFilter(KF_, translation_estimated_, quaternion_estimated_); 
+				publishPose(translation_estimated_, quaternion_estimated_);
+			}
+			count_ ++;
+		} else {
+			ROS_INFO("Initializing");
+		    translation_estimated_.at<double>(0) = x_init_;
+		    translation_estimated_.at<double>(1) = y_init_;
+		    translation_estimated_.at<double>(2) = z_init_;
+		    tf::Quaternion quatn;
+		    quaternion_estimated_[0] = 0.0; 
+		    quaternion_estimated_[1] = 0.0; 
+		    quaternion_estimated_[2] = 0.0; 
+		    quaternion_estimated_[3] = 1.0;		
+			publishPose(translation_estimated_, quaternion_estimated_);
+		}
 	}
 }
 
@@ -174,3 +207,146 @@ std::tuple<cv::Point3d, tf::Quaternion> PoseEstimator::getTQ(cv::Mat T) {
     std::tuple<cv::Point3d, tf::Quaternion> result(translation, quatn);
     return result;
 }
+
+void PoseEstimator::publishPose(cv::Mat translation_estimated, 
+								tf::Quaternion quaternion_estimated) {
+    tf::Vector3 globalTranslation_rh(translation_estimated.at<double>(0),
+                                     translation_estimated.at<double>(1),
+                                     translation_estimated.at<double>(2));
+    time_stamp_ = ros::Time::now();
+    static tf::TransformBroadcaster br;
+    tf::Transform transform;
+    transform.setOrigin(globalTranslation_rh);
+    transform.setRotation(quaternion_estimated);
+    br.sendTransform(tf::StampedTransform(transform, time_stamp_, "map", "base_link"));
+    pose_6d_.header.frame_id = path_6d_.header.frame_id = "map";
+    pose_6d_.header.stamp = path_6d_.header.stamp = time_stamp_;		   
+    pose_6d_.pose.position.x = translation_estimated.at<double>(0);
+    pose_6d_.pose.position.y = translation_estimated.at<double>(1);
+    pose_6d_.pose.position.z = translation_estimated.at<double>(2);
+    pose_6d_.pose.orientation.x = quaternion_estimated[0];
+    pose_6d_.pose.orientation.y = quaternion_estimated[1];
+    pose_6d_.pose.orientation.z = quaternion_estimated[2];
+	pose_6d_.pose.orientation.w = quaternion_estimated[3]; 
+	pose_pub_.publish(pose_6d_);
+	path_6d_.poses.push_back(pose_6d_);
+	path_pub_.publish(path_6d_);
+}
+
+void PoseEstimator::initKalmanFilter(cv::KalmanFilter &KF, int nStates, int nMeasurements, int nInputs, double dt) {
+  KF.init(nStates, nMeasurements, nInputs, CV_64F);                 // init Kalman Filter
+  cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-5));       // set process noise
+  cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-2));   // set measurement noise
+  cv::setIdentity(KF.errorCovPost, cv::Scalar::all(1));             // error covariance
+                 /* DYNAMIC MODEL */
+  //  [1 0 0 dt  0  0 dt2   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 1 0  0 dt  0   0 dt2   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 1  0  0 dt   0   0 dt2 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  1  0  0  dt   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  1  0   0  dt   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  1   0   0  dt 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   1   0   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   1   0 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   0   1 0 0 0  0  0  0   0   0   0]
+  //  [0 0 0  0  0  0   0   0   0 1 0 0 dt  0  0 dt2   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 1 0  0 dt  0   0 dt2   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 1  0  0 dt   0   0 dt2]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  1  0  0  dt   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  1  0   0  dt   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  1   0   0  dt]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   1   0   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   0   1   0]
+  //  [0 0 0  0  0  0   0   0   0 0 0 0  0  0  0   0   0   1]
+
+  // position
+  KF.transitionMatrix.at<double>(0,3) = dt;
+  KF.transitionMatrix.at<double>(1,4) = dt;
+  KF.transitionMatrix.at<double>(2,5) = dt;
+  KF.transitionMatrix.at<double>(3,6) = dt;
+  KF.transitionMatrix.at<double>(4,7) = dt;
+  KF.transitionMatrix.at<double>(5,8) = dt;
+  KF.transitionMatrix.at<double>(0,6) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(1,7) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(2,8) = 0.5*pow(dt,2);
+
+  // orientation
+  KF.transitionMatrix.at<double>(9,12) = dt;
+  KF.transitionMatrix.at<double>(10,13) = dt;
+  KF.transitionMatrix.at<double>(11,14) = dt;
+  KF.transitionMatrix.at<double>(12,15) = dt;
+  KF.transitionMatrix.at<double>(13,16) = dt;
+  KF.transitionMatrix.at<double>(14,17) = dt;
+  KF.transitionMatrix.at<double>(9,15) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(10,16) = 0.5*pow(dt,2);
+  KF.transitionMatrix.at<double>(11,17) = 0.5*pow(dt,2);
+
+       /* MEASUREMENT MODEL */
+  //  [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0]
+  //  [0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]
+
+  KF.measurementMatrix.at<double>(0,0) = 1;  // x
+  KF.measurementMatrix.at<double>(1,1) = 1;  // y
+  KF.measurementMatrix.at<double>(2,2) = 1;  // z
+  KF.measurementMatrix.at<double>(3,9) = 1;  // roll
+  KF.measurementMatrix.at<double>(4,10) = 1; // pitch
+  KF.measurementMatrix.at<double>(5,11) = 1; // yaw
+}
+
+void PoseEstimator::fillMeasurements( cv::Mat &measurements,
+                   const cv::Mat &translation_measured, const tf::Quaternion &quat_measured) {
+    double roll, pitch, yaw;
+    tf::Matrix3x3(quat_measured).getRPY(roll, pitch, yaw);
+    // Set measurement to predict
+    measurements.at<double>(0) = translation_measured.at<double>(0); // x
+    measurements.at<double>(1) = translation_measured.at<double>(1); // y
+    measurements.at<double>(2) = translation_measured.at<double>(2); // z
+    measurements.at<double>(3) = roll;      // roll
+    measurements.at<double>(4) = pitch;      // pitch
+    measurements.at<double>(5) = yaw;      // yaw
+}
+
+
+void PoseEstimator::updateKalmanFilter(cv::KalmanFilter &KF, 
+	                                   cv::Mat &measurement,
+                                       cv::Mat &translation_estimated, 
+                                       tf::Quaternion &quaternion_estimated ) {
+    // First predict, to update the internal statePre variable
+    cv::Mat prediction = KF.predict();
+    // The "correct" phase that is going to use the predicted value and our measurement
+    cv::Mat estimated = KF.correct(measurement);
+    // Estimated translation
+    translation_estimated.at<double>(0) = estimated.at<double>(0);
+    translation_estimated.at<double>(1) = estimated.at<double>(1);
+    translation_estimated.at<double>(2) = estimated.at<double>(2);
+    // Estimated euler angles
+    double roll, pitch, yaw;
+    roll = estimated.at<double>(9);
+    pitch = estimated.at<double>(10);
+    yaw = estimated.at<double>(11);
+    // Convert euler angles to quaternions
+    quaternion_estimated.setRPY(roll, pitch, yaw);
+}
+
+void PoseEstimator::updateKalmanFilter(cv::KalmanFilter &KF,
+                                       cv::Mat &translation_estimated, 
+                                       tf::Quaternion &quaternion_estimated ) {
+    // First predict, to update the internal statePre variable
+    cv::Mat prediction = KF.predict();
+
+    // Estimated translation
+    translation_estimated.at<double>(0) = prediction.at<double>(0);
+    translation_estimated.at<double>(1) = prediction.at<double>(1);
+    translation_estimated.at<double>(2) = prediction.at<double>(2);
+    // Estimated euler angles
+    double roll, pitch, yaw;
+    roll = prediction.at<double>(9);
+    pitch = prediction.at<double>(10);
+    yaw = prediction.at<double>(11);
+    // Convert euler angles to quaternions
+    quaternion_estimated.setRPY(roll, pitch, yaw);
+}
+

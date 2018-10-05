@@ -8,6 +8,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
+// OpenCV libraries
+#include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/aruco.hpp>
@@ -55,10 +57,27 @@ private:
     nav_msgs::Path path_6d_;
     sensor_msgs::ImagePtr msg_;
 
-    bool show_image;
+    bool show_image_;
+    bool initializing_;
 
+	// Kalman Filter
+	cv::KalmanFilter KF_;
+	int nStates_, nMeasurements_, nInputs_;
+	double dt_;
 
+	// initial position
+	double x_init_, y_init_, z_init_;
 
+	// pose variables
+	cv::Mat translation_estimated_;
+	cv::Mat translation_measured_;
+	tf::Quaternion quaternion_estimated_;
+
+	// timing amd counters for tests and debugging
+	ros::Time begin_;
+	int count_;
+public:
+	PoseEstimator(ros::NodeHandle, image_transport::ImageTransport);
 	void paramReader();
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg);
 	void estimatePose();
@@ -67,22 +86,19 @@ private:
 	std::tuple<float, int, std::vector<cv::Point2f>> findMinDist(std::vector<std::vector<cv::Point2f>>);
 	cv::Mat getGlobalTransformation(cv::Vec3d, cv::Vec3d, int);
 	std::tuple<cv::Point3d, tf::Quaternion> getTQ(cv::Mat);
+	void publishPose(cv::Mat, tf::Quaternion);
 
-    //Kalman Filter for smoothing
-	cv::KalmanFilter KF;
-    int nStates, nMeasurements, nInputs;
-    double dt;
-
-	void initKalmanFilter(cv::KalmanFilter &KF, int nStates, int nMeasurements, int nInputs, double dt);
-	void fillMeasurements( cv::Mat &measurements, const cv::Mat &translation_measured, 
-	                     const tf::Quaternion &quat_measured);
+	//Kalman Filter
+	void initKalmanFilter(cv::KalmanFilter &KF, int nStates, 
+						  int nMeasurements, int nInputs, double dt);
+	void fillMeasurements( cv::Mat &measurements, 
+						   const cv::Mat &translation_measured, 
+	                       const tf::Quaternion &quat_measured);
 	void updateKalmanFilter( cv::KalmanFilter &KF, cv::Mat &measurement,
-	                       cv::Mat &translation_estimated, tf::Quaternion &quaternion_estimated );
+	                         cv::Mat &translation_estimated, 
+	                         tf::Quaternion &quaternion_estimated );
 	void updateKalmanFilter( cv::KalmanFilter &KF,
-	                       cv::Mat &translation_estimated, 
-						   tf::Quaternion &quaternion_estimated );
-public:
-	PoseEstimator(ros::NodeHandle, image_transport::ImageTransport);
-
+	                         cv::Mat &translation_estimated, 
+							 tf::Quaternion &quaternion_estimated );
 };
 

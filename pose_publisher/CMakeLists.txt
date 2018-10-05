@@ -23,7 +23,7 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
 )
 
-add_executable(${PROJECT_NAME}_node src/pose_publisher.cpp src/kalman_filter.cpp src/pose_publisher_node.cpp)
+add_executable(${PROJECT_NAME}_node src/pose_publisher.cpp src/pose_publisher_node.cpp)
 
 target_link_libraries(${PROJECT_NAME}_node
    ${catkin_LIBRARIES} ${OpenCV_LIBS}
