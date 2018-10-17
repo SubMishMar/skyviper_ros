@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Standard ROS libraries
 #include <ros/ros.h>
+#include <nav_msgs/Path.h>
 #include <sensor_msgs/image_encodings.h>
 #include <camera_calibration_parsers/parse_ini.h>
 #include <tf/transform_broadcaster.h>
@@ -56,7 +57,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-#include <opencv2/tracking.hpp>
 // Custom message
 #include <aruco_mapping/ArucoMarker.h>
 
@@ -94,15 +94,6 @@ public:
   /** \brief Callback function to handle image processing*/
   void imageCallback(const sensor_msgs::ImageConstPtr &original_image);
 
-  // Initialize the Kalman Filter
-  void initKalmanFilter(cv::KalmanFilter &KF, int nStates, int nMeasurements, int nInputs, double dt);
-  void fillMeasurements( cv::Mat &measurements, const cv::Mat &translation_measured, 
-                         const tf::Quaternion &quat_measured);
-  void updateKalmanFilter( cv::KalmanFilter &KF, cv::Mat &measurement,
-                           cv::Mat &translation_estimated, tf::Quaternion &quaternion_estimated );
-  void updateKalmanFilter( cv::KalmanFilter &KF,
-                                       cv::Mat &translation_estimated, 
-                                       tf::Quaternion &quaternion_estimated );
 private:
   
   /** \brief Function to parse data from calibration file*/
@@ -119,19 +110,13 @@ private:
 
   /** \brief Publisher of aruco_mapping::ArucoMarker custom message*/
   ros::Publisher marker_msg_pub_;
-
-  /** \pose publisher */
-  ros::Publisher global_pose_publisher_;
-  ros::Publisher global_pose_publisher_kf_;
-
+  ros::Publisher marker_pose_pub_;
+  ros::Publisher marker_path_pub_;
   /** \brief Compute TF from marker detector result*/
   tf::Transform arucoMarker2Tf(const aruco::Marker &marker);
 
   /** \brief Process actual image, detect markers and compute poses */
   bool processImage(cv::Mat input_image,cv::Mat output_image);
-
-  double px, py, pz;
-  double qx, qy, qz, qw;
 
   //Launch file params
   std::string calib_filename_;                    
@@ -149,12 +134,12 @@ private:
    
   /** \brief Actual TF of camera with respect to world's origin */
   tf::StampedTransform world_position_transform_;
-  
+  tf::StampedTransform world_position_transform__;
+
   /** \brief Actual Pose of camera with respect to world's origin */
   geometry_msgs::Pose world_position_geometry_msg_;
-  geometry_msgs::PoseStamped world_posestamped_msgs_;
-  geometry_msgs::PoseStamped world_posestamped_msgs_kf_;
-
+  geometry_msgs::PoseStamped world_position_geometry_msg__;
+  nav_msgs::Path world_path_msg_;
   aruco::CameraParameters aruco_calib_params_;
 
   int marker_counter_;
@@ -165,11 +150,6 @@ private:
   
   tf::TransformListener *listener_;
   tf::TransformBroadcaster broadcaster_;
-
-  // Kalman Filter
-  cv::KalmanFilter KF;
-  int nStates, nMeasurements, nInputs;
-  double dt;
 
   //Consts
    static const int CV_WAIT_KEY = 10;
