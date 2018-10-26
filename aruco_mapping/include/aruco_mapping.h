@@ -53,6 +53,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // OpenCV libraries
 #include <opencv2/opencv.hpp>
+#include <opencv2/tracking.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -93,7 +94,7 @@ public:
 
   /** \brief Callback function to handle image processing*/
   void imageCallback(const sensor_msgs::ImageConstPtr &original_image);
-
+  
 private:
   
   /** \brief Function to parse data from calibration file*/
@@ -112,6 +113,7 @@ private:
   ros::Publisher marker_msg_pub_;
   ros::Publisher marker_pose_pub_;
   ros::Publisher marker_path_pub_;
+  ros::Publisher marker_pose_pub_kf_;
   /** \brief Compute TF from marker detector result*/
   tf::Transform arucoMarker2Tf(const aruco::Marker &marker);
 
@@ -139,6 +141,7 @@ private:
   /** \brief Actual Pose of camera with respect to world's origin */
   geometry_msgs::Pose world_position_geometry_msg_;
   geometry_msgs::PoseStamped world_position_geometry_msg__;
+  geometry_msgs::PoseStamped world_position_geometry_msg_kf_;
   nav_msgs::Path world_path_msg_;
   aruco::CameraParameters aruco_calib_params_;
 
@@ -151,22 +154,24 @@ private:
   tf::TransformListener *listener_;
   tf::TransformBroadcaster broadcaster_;
 
+  bool initializing_;
+
   //Consts
-   static const int CV_WAIT_KEY = 10;
-   static const int CV_WINDOW_MARKER_LINE_WIDTH = 2;
+  static const int CV_WAIT_KEY = 10;
+  static const int CV_WINDOW_MARKER_LINE_WIDTH = 2;
 
-   static const double WAIT_FOR_TRANSFORM_INTERVAL = 2.0;
-   static const double BROADCAST_WAIT_INTERVAL = 0.0001;
-   static const double INIT_MIN_SIZE_VALUE = 1000000;
+  static const double WAIT_FOR_TRANSFORM_INTERVAL = 2.0;
+  static const double BROADCAST_WAIT_INTERVAL = 0.0001;
+  static const double INIT_MIN_SIZE_VALUE = 1000000;
 
-   static const double RVIZ_MARKER_HEIGHT = 0.01;
-   static const double RVIZ_MARKER_LIFETIME = 0.2;
-   static const double RVIZ_MARKER_COLOR_R = 1.0;
-   static const double RVIZ_MARKER_COLOR_G = 1.0;
-   static const double RVIZ_MARKER_COLOR_B = 1.0;
-   static const double RVIZ_MARKER_COLOR_A = 1.0;
+  static const double RVIZ_MARKER_HEIGHT = 0.01;
+  static const double RVIZ_MARKER_LIFETIME = 0.2;
+  static const double RVIZ_MARKER_COLOR_R = 1.0;
+  static const double RVIZ_MARKER_COLOR_G = 1.0;
+  static const double RVIZ_MARKER_COLOR_B = 1.0;
+  static const double RVIZ_MARKER_COLOR_A = 1.0;
 
-   static const double THIS_IS_FIRST_MARKER = -2;
+  static const double THIS_IS_FIRST_MARKER = -2;
 
 }; //ArucoMapping class
 }  //aruco_mapping namespace

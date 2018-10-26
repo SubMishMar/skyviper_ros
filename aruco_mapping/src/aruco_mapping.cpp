@@ -87,7 +87,10 @@ ArucoMapping::ArucoMapping(ros::NodeHandle *nh) :
   marker_msg_pub_           = nh->advertise<aruco_mapping::ArucoMarker>("aruco_poses",1);
   marker_visualization_pub_ = nh->advertise<visualization_msgs::Marker>("aruco_markers",1);
   marker_pose_pub_ = nh->advertise<geometry_msgs::PoseStamped>("global_pose", 1);
+  marker_pose_pub_kf_ = nh->advertise<geometry_msgs::PoseStamped>("global_pose_kf", 1);
   marker_path_pub_ = nh->advertise<nav_msgs::Path>("global_path", 1);
+
+  initializing_ = true;
   //Parse data from calibration file
   parseCalibrationFile(calib_filename_);
 
@@ -110,6 +113,7 @@ ArucoMapping::~ArucoMapping()
 {
  delete listener_;
 }
+
 
 bool
 ArucoMapping::parseCalibrationFile(std::string calib_filename)
@@ -491,11 +495,11 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
       std::stringstream marker_tf_name;
       marker_tf_name << "marker_" << index;
 
-      listener_->waitForTransform("world",marker_tf_name.str(),ros::Time(0),
+      listener_->waitForTransform("map",marker_tf_name.str(),ros::Time(0),
                                   ros::Duration(WAIT_FOR_TRANSFORM_INTERVAL));
       try
       {
-        listener_->lookupTransform("world",marker_tf_name.str(),ros::Time(0),
+        listener_->lookupTransform("map",marker_tf_name.str(),ros::Time(0),
                                    markers_[index].tf_to_world);
       }
       catch(tf::TransformException &e)
@@ -563,16 +567,16 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     std::stringstream closest_camera_tf_name;
     closest_camera_tf_name << "camera_" << closest_camera_index_;
 
-    listener_->waitForTransform("world",closest_camera_tf_name.str(),ros::Time(0),
+    listener_->waitForTransform("map",closest_camera_tf_name.str(),ros::Time(0),
                                 ros::Duration(WAIT_FOR_TRANSFORM_INTERVAL));
     try
     {
-      listener_->lookupTransform("world",closest_camera_tf_name.str(),ros::Time(0),
+      listener_->lookupTransform("map",closest_camera_tf_name.str(),ros::Time(0),
                                  world_position_transform_);
     }
     catch(tf::TransformException &ex)
     {
-      ROS_ERROR("Not able to lookup transform");
+      ROS_ERROR("Not able to lookup transform from map to closest_camera_tf_name");
     }
     // Saving TF to Pose
     const tf::Vector3 marker_origin = world_position_transform_.getOrigin();
@@ -588,18 +592,17 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
 
     try
     {
-      listener_->lookupTransform("world", "base_link",ros::Time(0),
+      listener_->lookupTransform("map", "base_link",ros::Time(0),
                                  world_position_transform__);
     }
     catch(tf::TransformException &ex)
     {
-      ROS_ERROR("Not able to lookup transform");
+      ROS_ERROR("Not able to lookup transform from map to base_link");
     }
-
     const tf::Vector3 drone_origin = world_position_transform__.getOrigin();
     tf::Quaternion drone_quaternion = world_position_transform__.getRotation();
     world_position_geometry_msg__.header.stamp = world_path_msg_.header.stamp = ros::Time::now();
-    world_position_geometry_msg__.header.frame_id = world_path_msg_.header.frame_id = "world";
+    world_position_geometry_msg__.header.frame_id = world_path_msg_.header.frame_id = "map";
     world_position_geometry_msg__.pose.position.x = drone_origin.getX();
     world_position_geometry_msg__.pose.position.y = drone_origin.getY();
     world_position_geometry_msg__.pose.position.z = drone_origin.getZ();
@@ -609,8 +612,6 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
     world_position_geometry_msg__.pose.orientation.z = drone_quaternion.getZ();
     world_position_geometry_msg__.pose.orientation.w = drone_quaternion.getW();
     world_path_msg_.poses.push_back(world_position_geometry_msg__);
-    marker_pose_pub_.publish(world_position_geometry_msg__);
-    marker_path_pub_.publish(world_path_msg_);
   }
 
   //------------------------------------------------------
@@ -627,7 +628,7 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
   if((any_markers_visible == true))
   {
     marker_msg.header.stamp = ros::Time::now();
-    marker_msg.header.frame_id = "world";
+    marker_msg.header.frame_id = "map";
     marker_msg.marker_visibile = true;
     marker_msg.num_of_visible_markers = num_of_visible_markers;
     marker_msg.global_camera_pose = world_position_geometry_msg_;
@@ -641,20 +642,35 @@ ArucoMapping::processImage(cv::Mat input_image,cv::Mat output_image)
         marker_msg.global_marker_poses.push_back(markers_[j].geometry_msg_to_world);       
       }
     }
+    initializing_ = false;
   }
   else
   {
     marker_msg.header.stamp = ros::Time::now();
-    marker_msg.header.frame_id = "world";
+    marker_msg.header.frame_id = "map";
     marker_msg.num_of_visible_markers = num_of_visible_markers;
     marker_msg.marker_visibile = false;
     marker_msg.marker_ids.clear();
     marker_msg.global_marker_poses.clear();
+    if(initializing_) {
+	    world_position_geometry_msg__.header.stamp = world_path_msg_.header.stamp = ros::Time::now();
+	    world_position_geometry_msg__.header.frame_id = world_path_msg_.header.frame_id = "map";
+	    world_position_geometry_msg__.pose.position.x = 0;
+	    world_position_geometry_msg__.pose.position.y = 0;
+	    world_position_geometry_msg__.pose.position.z = 0;
+
+	    world_position_geometry_msg__.pose.orientation.x = 0;
+	    world_position_geometry_msg__.pose.orientation.y = 0;
+	    world_position_geometry_msg__.pose.orientation.z = 0;
+	    world_position_geometry_msg__.pose.orientation.w = 1;
+	    world_path_msg_.poses.push_back(world_position_geometry_msg__);   	
+    }
   }
 
   // Publish custom marker msg
   marker_msg_pub_.publish(marker_msg);
-
+  marker_pose_pub_.publish(world_position_geometry_msg__);
+  marker_path_pub_.publish(world_path_msg_);
   return true;
 }
 
@@ -671,7 +687,7 @@ ArucoMapping::publishTfs(bool world_option)
     // Older marker - or World
     std::stringstream marker_tf_id_old;
     if(i == 0)
-      marker_tf_id_old << "world";
+      marker_tf_id_old << "map";
     else
       marker_tf_id_old << "marker_" << markers_[i].previous_marker_id;
     broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_previous,ros::Time::now(),marker_tf_id_old.str(),marker_tf_id.str()));
@@ -686,7 +702,7 @@ ArucoMapping::publishTfs(bool world_option)
       // Global position of marker TF
       std::stringstream marker_globe;
       marker_globe << "marker_globe_" << i;
-      broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_world,ros::Time::now(),"world",marker_globe.str()));
+      broadcaster_.sendTransform(tf::StampedTransform(markers_[i].tf_to_world,ros::Time::now(),"map",marker_globe.str()));
     }
 
     // Cubes for RVIZ - markers
@@ -695,7 +711,7 @@ ArucoMapping::publishTfs(bool world_option)
 
   // Global Position of object
   if(world_option == true) {
-  	  broadcaster_.sendTransform(tf::StampedTransform(world_position_transform_,ros::Time::now(),"world","camera_position"));
+  	  broadcaster_.sendTransform(tf::StampedTransform(world_position_transform_,ros::Time::now(),"map","camera_position"));
   	  tf::Transform transform;
       transform.setOrigin(tf::Vector3(0, 0, 0));
       tf::Matrix3x3 Rotn;
@@ -718,7 +734,7 @@ ArucoMapping::publishMarker(geometry_msgs::Pose marker_pose, int marker_id, int 
   visualization_msgs::Marker vis_marker;
 
   if(index == 0)
-    vis_marker.header.frame_id = "world";
+    vis_marker.header.frame_id = "map";
   else
   {
     std::stringstream marker_tf_id_old;
