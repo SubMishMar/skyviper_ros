@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( aruco_marker_generation )
+find_package( OpenCV REQUIRED )
+add_executable( aruco_marker_generator aruco_marker_generator.cpp )
+target_link_libraries( aruco_marker_generator ${OpenCV_LIBS})

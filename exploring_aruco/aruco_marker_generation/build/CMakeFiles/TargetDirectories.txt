@@ -1,0 +1,3 @@
+/home/subodh/github-projects/exploring_aruco/aruco_marker_generation/build/CMakeFiles/edit_cache.dir
+/home/subodh/github-projects/exploring_aruco/aruco_marker_generation/build/CMakeFiles/rebuild_cache.dir
+/home/subodh/github-projects/exploring_aruco/aruco_marker_generation/build/CMakeFiles/aruco_marker_generator.dir
